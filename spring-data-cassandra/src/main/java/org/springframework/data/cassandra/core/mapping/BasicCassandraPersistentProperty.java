@@ -17,6 +17,9 @@ package org.springframework.data.cassandra.core.mapping;
 
 import static org.springframework.data.cassandra.core.cql.CqlIdentifier.*;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedParameterizedType;
+import java.lang.reflect.AnnotatedType;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -421,5 +424,63 @@ public class BasicCassandraPersistentProperty extends AnnotationBasedPersistentP
 	@Override
 	public boolean isMapLike() {
 		return ClassUtils.isAssignable(Map.class, getType());
+	}
+
+	/* (non-Javadoc)
+	 * @see org.springframework.data.cassandra.core.mapping.CassandraPersistentProperty#findAnnotatedType(java.lang.Class)
+	 */
+	@Override
+	public AnnotatedType findAnnotatedType(Class<? extends Annotation> annotationType) {
+
+		if (getField() != null) {
+
+			AnnotatedType type = getField().getAnnotatedType();
+
+			if (hasAnnotation(type, annotationType, getTypeInformation())) {
+				return type;
+			}
+		}
+
+		if (getGetter() != null) {
+
+			AnnotatedType type = getGetter().getAnnotatedReturnType();
+
+			if (hasAnnotation(type, annotationType, getTypeInformation())) {
+				return type;
+			}
+		}
+
+		if (getSetter() != null && getSetter().getParameterCount() == 1) {
+
+			AnnotatedType type = getSetter().getParameters()[0].getAnnotatedType();
+
+			if (hasAnnotation(type, annotationType, getTypeInformation())) {
+				return type;
+			}
+		}
+
+		return null;
+	}
+
+	private static boolean hasAnnotation(AnnotatedType type, Class<? extends Annotation> annotationType,
+			TypeInformation<?> typeInformation) {
+
+		if (AnnotatedElementUtils.hasAnnotation(type, annotationType)) {
+			return true;
+		}
+
+		AnnotatedParameterizedType parameterizedType = (AnnotatedParameterizedType) type;
+		AnnotatedType[] arguments = parameterizedType.getAnnotatedActualTypeArguments();
+
+		if (typeInformation.isCollectionLike() && arguments.length == 1) {
+			return AnnotatedElementUtils.hasAnnotation(arguments[0], annotationType);
+		}
+
+		if (typeInformation.isMap() && arguments.length == 2) {
+			return AnnotatedElementUtils.hasAnnotation(arguments[0], annotationType)
+					|| AnnotatedElementUtils.hasAnnotation(arguments[1], annotationType);
+		}
+
+		return false;
 	}
 }
